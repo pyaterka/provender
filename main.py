@@ -4,6 +4,10 @@ import sys
 from openai import OpenAI
 from dotenv import load_dotenv
 from prompts import system_prompt
+from functions import get_conversation_filename, save_conversation, create_conversation_data
+from pathlib import Path
+from datetime import datetime
+
 
 def main():
 
@@ -17,21 +21,28 @@ def main():
         {"role": "system", "content": system_prompt}
     ]
 
+    conversation_file, timestamp = get_conversation_filename()
+
     try:
         while True:
-
             user_prompt = input("You: ")
+
             if user_prompt.lower() in ["clear"]:
+                save_conversation(conversation_file, create_conversation_data(messages, timestamp, system_prompt))
+
                 messages =[
                     {"role": "system", "content": system_prompt}
                 ]
-                print("Conversation cleared.")
-                continue
-                        
+                conversation_file, timestamp = get_conversation_filename()
+                print("Conversation saved and cleared. Starting fresh!")
+                continue    
             elif user_prompt.lower() in ["exit", "quit"]:
+                save_conversation(conversation_file, create_conversation_data(messages, timestamp, system_prompt))
                 break
-
-            elif len(user_prompt.strip().lower()) == 0:
+            elif user_prompt.lower() in ["help", "/help"]:
+                print("Commands: clear, exit, quit")
+                continue
+            elif not user_prompt.strip():
                 continue
             else:
                 messages.append({"role": "user", "content": user_prompt})
@@ -58,7 +69,12 @@ def main():
 
             messages.append({"role": "assistant", "content": assistant_reply})
 
+            save_conversation(conversation_file, create_conversation_data(messages, timestamp, system_prompt))
+
     except KeyboardInterrupt:
+        save_conversation(conversation_file, save_conversation(conversation_file, create_conversation_data(messages, timestamp, system_prompt))
+)
+        
         print("\nGoodbye!")
         sys.exit(0)
 
