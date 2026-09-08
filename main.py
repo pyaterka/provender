@@ -4,7 +4,7 @@ import sys
 from openai import OpenAI
 from dotenv import load_dotenv
 from prompts import system_prompt
-from functions import get_conversation_filename, save_conversation, create_conversation_data
+from file_functions import get_conversation_filename, save_conversation, create_conversation_data
 from pathlib import Path
 from datetime import datetime
 
@@ -17,9 +17,13 @@ def main():
         api_key=os.environ.get('OPENAI_API_KEY'),
         base_url="https://api.deepseek.com")
 
+    model = os.environ.get('DEFAULT_MODEL')
+
     messages =[
         {"role": "system", "content": system_prompt}
     ]
+
+    total_tokens_used = 0
 
     conversation_file, timestamp = get_conversation_filename()
 
@@ -28,7 +32,7 @@ def main():
             user_prompt = input("You: ")
 
             if user_prompt.lower() in ["clear"]:
-                save_conversation(conversation_file, create_conversation_data(messages, timestamp, system_prompt))
+                save_conversation(conversation_file, create_conversation_data(messages, timestamp, system_prompt, total_tokens_used))
 
                 messages =[
                     {"role": "system", "content": system_prompt}
@@ -37,11 +41,22 @@ def main():
                 print("Conversation saved and cleared. Starting fresh!")
                 continue    
             elif user_prompt.lower() in ["exit", "quit"]:
-                save_conversation(conversation_file, create_conversation_data(messages, timestamp, system_prompt))
+                save_conversation(conversation_file, create_conversation_data(messages, timestamp, system_prompt, total_tokens_used))
                 break
             elif user_prompt.lower() in ["help", "/help"]:
                 print("Commands: clear, exit, quit")
                 continue
+            elif user_prompt.lower().startswith("system "):
+                parts = user_prompt.split()
+                allowed_models = ["deepseek-v4-pro", "deepseek-v4-flash"]
+                if parts[1] in allowed_models:
+                    model = parts[1]
+                    print(f"{model} is set as a reasoning model")
+                    continue
+                else:
+                    print(f"Not a valid reasoning model")
+                    continue
+
             elif not user_prompt.strip():
                 continue
             else:
@@ -49,7 +64,7 @@ def main():
 
             try:
                 response = client.chat.completions.create(
-                    model="deepseek-v4-pro",
+                    model=model,
                     messages=messages,
                     stream=False,
                     reasoning_effort="high",
@@ -69,11 +84,12 @@ def main():
 
             messages.append({"role": "assistant", "content": assistant_reply})
 
-            save_conversation(conversation_file, create_conversation_data(messages, timestamp, system_prompt))
+            total_tokens_used += response.usage.total_tokens
+
+            save_conversation(conversation_file, create_conversation_data(messages, timestamp, system_prompt, total_tokens_used))
 
     except KeyboardInterrupt:
-        save_conversation(conversation_file, save_conversation(conversation_file, create_conversation_data(messages, timestamp, system_prompt))
-)
+        save_conversation(conversation_file, create_conversation_data(messages, timestamp, system_prompt, total_tokens_used))
         
         print("\nGoodbye!")
         sys.exit(0)
