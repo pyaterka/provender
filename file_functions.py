@@ -16,7 +16,11 @@ def create_conversation_data(messages, timestamp, system_prompt, total_tokens=0)
     first_user_msg = ""
     for msg in messages:
         if msg.get("role") == "user":
-            first_user_msg = ("content", "")[:50]
+            content = msg.get("content", "")
+            if len(content) > 50:
+                first_user_msg = content[:50] + "..."
+            else:
+                first_user_msg = content
             break
     return {
         "conversation_id": timestamp,
@@ -77,7 +81,7 @@ def get_conversation_preview(filepath):
         return {
             "filepath": filepath,
             "display_name": display_name,
-            "convirsation_id": conv_id,
+            "conversation_id": conv_id,
             "message_count": msg_count,
             "total_tokens": total_tokens,
             "first_message": first_msg,
@@ -103,6 +107,54 @@ def load_conversation(filepath):
     except Exception as e:
         print(f"Error loading conversation: {e}")
         return None
+
+
+def display_conversation(data, show_numbers=False):
+    """
+    Display a conversation in a readable format.
+        
+    Args:
+        data: The conversation data from JSON
+        show_numbers: If True, shows message numbers
+    """
+
+    if not data:
+        print("❌ No conversation data to display.")
+        return
+    print("\n" + "="*70)
+    print(f"📅 Conversation: {data.get('conversation_id', 'Unknown')}")
+    print(f"🪙 Total Tokens: {data.get('total_tokens', 0)}")
+    print(f"📝 Last Edited: {data.get('last_edited', 'Unknown')}")
+    
+    # Show custom name if exists
+    metadata = data.get("metadata", {})
+    if metadata.get("name"):
+        print(f"📌 Name: {metadata.get('name')}")
+    
+    print("="*70)
+    
+    messages = data.get("messages", [])
+    
+    for i, msg in enumerate(messages, 1):
+        role = msg.get("role", "unknown").upper()
+        content = msg.get("content", "")
+        
+        if role == "SYSTEM":
+            print(f"\n🤖 [SYSTEM PROMPT]:")
+            print(content)
+            print("-"*70)
+            continue
+        
+        # Display user/assistant messages
+        emoji = "👤" if role == "USER" else "🤖"
+        if show_numbers:
+            print(f"\n{emoji} [{role}] #{i}:")
+        else:
+            print(f"\n{emoji} [{role}]:")
+        print(content)
+        print("-"*70)
+    
+    print(f"\n💬 Total Messages: {len(messages)}")
     
 
 
