@@ -1,16 +1,5 @@
 import sqlite3
 
-def reset_database():
-
-    # Step 1: Connect to database
-    conn = sqlite3.connect('test_recipes.db')  # What filename?
-    cursor = conn.cursor()
-
-    cursor.execute("PRAGMA foreign_keys = ON")
-
-    cursor.execute("DROP TABLE IF EXISTS steps")
-    cursor.execute("DROP TABLE IF EXISTS ingredients")
-    cursor.execute("DROP TABLE IF EXISTS recipes")
 
 
 def reset_database():
@@ -22,8 +11,10 @@ def reset_database():
     
     # Drop tables in REVERSE dependency order
     # (children first, then parents)
+    cursor.execute("DROP TABLE IF EXISTS recipe_tags")
     cursor.execute("DROP TABLE IF EXISTS steps")
     cursor.execute("DROP TABLE IF EXISTS ingredients")
+    cursor.execute("DROP TABLE IF EXISTS tags")
     cursor.execute("DROP TABLE IF EXISTS recipes")
     
     # Create recipes table (parent)
@@ -37,6 +28,14 @@ def reset_database():
             cook_time INTEGER,
             difficulty TEXT CHECK(difficulty IN ('easy', 'medium', 'hard')),
             category TEXT CHECK(category IN ('breakfast', 'lunch', 'dinner'))
+        )
+    ''')
+
+    cursor.execute('''
+        CREATE TABLE tags (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            category TEXT
         )
     ''')
     
@@ -65,9 +64,43 @@ def reset_database():
         )
     ''')
 
+    cursor.execute('''
+        CREATE TABLE recipe_tags (
+            recipe_id INTEGER NOT NULL,
+            tag_id INTEGER NOT NULL,
+            PRIMARY KEY (recipe_id, tag_id),
+            FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE,
+            FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+        )
+    ''')
+
     conn.commit()
     conn.close()
     print("✅ Database reset with 3 tables")
+
+def insert_test_tags():
+    conn = sqlite3.connect('test_recipes.db')
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA foreign_keys = ON")
+
+    tags = [
+        ("quick", "method"),
+        ("healthy", "dietary"),
+        ("slow-cooker", "method"),
+        ("vegan", "dietary"),
+        ("comfort-food", "mood"),
+        ("breakfast", "meal"),
+    ]
+
+    for name, category in tags:
+        cursor.execute('''
+            INSERT INTO tags (name, category) VALUES (?, ?)
+        ''', (name, category))
+
+    conn.commit()
+    conn.close()
+    print(f"✅ {len(tags)} tags inserted")
+
 
 def insert_test_recipe():
     conn = sqlite3.connect('test_recipes.db')
@@ -116,25 +149,179 @@ def insert_test_recipe():
     conn.close()
     print("✅ Recipe with ingredients and steps inserted")
 
-def show_recipe_with_details():
-
+def tag_recipe(recipe_id, tag_name):
     conn = sqlite3.connect('test_recipes.db')
     cursor = conn.cursor()
     cursor.execute("PRAGMA foreign_keys = ON")
 
+    cursor.execute("SELECT id FROM tags WHERE name = ?", (tag_name,))
+    tag = cursor.fetchone()
+
+    if not tag:
+        print(f"❌ Tag '{tag_name}' doesn't exist")
+        conn.close()
+        return
+
+    tag_id = tag[0]
+
     cursor.execute('''
-        SELECT r.name, i.name, i.amount, i.unit
+        INSERT OR IGNORE INTO recipe_tags (recipe_id, tag_id)
+        VALUES (?, ?)
+        ''', (recipe_id, tag_id,))
+
+    conn.commit()
+    conn.close()
+    print(f"✅ Tagged recipe {recipe_id} with '{tag_name}'")
+
+def find_recipes_by_tag(tag_name): 
+    conn = sqlite3.connect('test_recipes.db')
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT r.id, r.name
+        FROM recipes r
+        JOIN recipe_tags rt ON rt.recipe_id = r.id
+        JOIN tags t ON t.id = rt.tag_id
+        WHERE t.name = ?
+    ''', (tag_name,))
+
+    print(f"\n🏷️  Recipes tagged '{tag_name}':")
+    for row in cursor.fetchall():
+        print(f"   [{row['id']}] {row['name']}")
+    
+    conn.close()
+
+def show_recipe_tags(recipe_id): 
+    conn = sqlite3.connect('test_recipes.db')
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT t.name
+        FROM tags t
+        JOIN recipe_tags rt ON rt.tag_id = t.id
+        WHERE rt.recipe_id = ?
+    ''', (recipe_id,))
+
+    tags = [row['name'] for row in cursor.fetchall()]
+    print(f"Recipe {recipe_id} tags: {', '.join(tags) if tags else 'none'}")
+    
+    conn.close()
+
+def find_recipes_with_all_tags(*tag_names): 
+    conn = sqlite3.connect('test_recipes.db')
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    placeholders = ','.join('?' for _ in tag_names)
+
+    cursor.execute(f'''
+        SELECT r.id, r.name
+        FROM recipes r
+        JOIN recipe_tags rt ON rt.recipe_id = r.id
+        JOIN tags t ON t.id = rt.tag_id
+        WHERE t.name IN ({placeholders})
+        GROUP BY r.id
+        HAVING COUNT(DISTINCT t.name) = ?
+    ''', (*tag_names, len(tag_names)))
+
+    print(f"\n🏷️  Recipes with ALL tags {tag_names}:")
+    for row in cursor.fetchall():
+        print(f"   [{row['id']}] {row['name']}")
+    
+    conn.close()
+
+
+
+def show_recipe(recipe_id):
+    conn = sqlite3.connect('test_recipes.db')
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA foreign_keys = ON")
+
+    cursor.execute("SELECT * FROM recipes WHERE id = ?", (recipe_id,))
+    recipe = cursor.fetchone()
+
+    if not recipe:
+        print(f"❌ Recipe {recipe_id} not found")
+        conn.close()
+        return
+
+    (recipe_id, name, created, modified, prep, cook, difficulty, category) = recipe
+
+    print("\n" + "=" * 70)
+    print(f"📖 Recipe: {name}")
+    print("="*70)
+    print(f"   Category: {category} | Difficulty: {difficulty}")
+    print(f"   Prep: {prep} min | Cook: {cook} min")
+    print(f"   Created: {created}")
+    print("="*70)
+
+    cursor.execute('''
+        SELECT name, amount, unit, position
+        FROM ingredients
+        WHERE recipe_id = ?
+        ORDER BY position
+        ''', (recipe_id,))
+    ingredients = cursor.fetchall()
+
+    print("\n🥕 Ingredients:")
+    for ing in ingredients:
+        ing_name, amount, unit, position = ing
+        if amount and unit:
+            print(f"   {position}. {amount} {unit} {ing_name}")
+        elif amount:
+            print(f"   {position}. {amount} {ing_name}")
+        else:
+            print(f"   {position}. {ing_name}")
+
+    cursor.execute('''
+        SELECT step_number, instruction, duration 
+        FROM steps 
+        WHERE recipe_id = ? 
+        ORDER BY step_number
+    ''', (recipe_id,))
+    steps = cursor.fetchall()
+    
+    print("\n📝 Steps:")
+    for step in steps:
+        step_num, instruction, duration = step
+        if duration:
+            print(f"   {step_num}. {instruction} ({duration} min)")
+        else:
+            print(f"   {step_num}. {instruction}")
+    
+    print("\n" + "="*70)
+    conn.close()
+
+    
+def show_recipe_with_details():
+
+    conn = sqlite3.connect('test_recipes.db')
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+
+    cursor.execute('''
+        SELECT r.name AS recipe_name, i.name AS ingredient_name, i.amount, i.unit
         FROM recipes r
         JOIN ingredients i ON i.recipe_id = r.id
         WHERE r.id = ?
     ''', (1,))
 
-    print("=" * 70)
-    recipe = cursor.fetchall()
+   
+    rows = cursor.fetchall()
 
-    print("\n📖 Recipe:")
+    if not rows:
+        print("❌ Recipe not found")
+        conn.close()
+        return
+
+    recipe_name = rows[0]['recipe_name']
+    print(f"\n📖 Recipe: {recipe_name}")
     
-    print(recipe)
+    for row in rows:
+        print(f"  - {row['amount']} {row['unit']} {row['ingredient_name']}")
 
     conn.close()
 
@@ -245,8 +432,68 @@ def query_recipes():
         print(row)
     
     conn.close()
+
+def recipe_stats():
+
+    conn = sqlite3.connect("test_recipes.db")
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT
+            r.name,
+            COUNT(DISTINCT i.id) as ingredient_count,
+            COUNT(DISTINCT s.id) as step_count
+        FROM recipes r
+        LEFT JOIN ingredients i ON i.recipe_id = r.id
+        LEFT JOIN steps s ON s.recipe_id = r.id
+        GROUP BY r.id
+    ''')
+
+    print("\n📊 Recipe Statistics:")
+    for row in cursor.fetchall():
+        name, ing_count, step_count = row
+        print(f"   {name}: {ing_count} ingredients, {step_count} steps")
+    
+    conn.close()
+
+def test_cascade():
+    """Test that deleting a recipe removes its ingredients/steps"""
+    conn = sqlite3.connect('test_recipes.db')
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA foreign_keys = ON")
+    
+    # Count before
+    cursor.execute("SELECT COUNT(*) FROM ingredients WHERE recipe_id = 1")
+    before = cursor.fetchone()[0]
+    
+    # Delete recipe
+    cursor.execute("DELETE FROM recipes WHERE id = 1")
+    
+    # Count after
+    cursor.execute("SELECT COUNT(*) FROM ingredients WHERE recipe_id = 1")
+    after = cursor.fetchone()[0]
+    
+    print(f"Ingredients before delete: {before}")
+    print(f"Ingredients after delete: {after}")  # Should be 0!
+    
+    conn.commit()
+    conn.close()
     
 if __name__ == "__main__":
     reset_database()
     insert_test_recipe()
-    show_recipe_with_details()
+    insert_test_tags()
+    
+    # Tag the recipe
+    tag_recipe(1, "quick")
+    tag_recipe(1, "healthy")
+    tag_recipe(1, "breakfast")
+    
+    # Show tags for the recipe
+    show_recipe_tags(1)
+    
+    # Find recipes by tag
+    find_recipes_by_tag("healthy")
+    
+    # Find recipes with multiple tags
+    find_recipes_with_all_tags("quick", "healthy")
