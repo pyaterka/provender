@@ -19,3 +19,28 @@ Then recommend 3 recipes that match their answers, using this format:
 
 End by asking: "Which sounds good to you? Or tell me more about what you're craving!"
 """
+
+save_prompt = """
+Convert the following recipe into JSON. 
+
+Rules:
+- Output ONLY valid JSON, no explanation, no markdown
+- Use null for missing values
+- Don't invent data
+- Use this exact structure:
+
+{
+  "name": "string (required)",
+  "prep_time": integer or null,
+  "cook_time": integer or null,
+  "difficulty": "easy" | "medium" | "hard" or null,
+  "category": "breakfast" | "lunch" | "dinner" or null,
+  "tags": ["string"],
+  "ingredients": [
+    {"name": "string", "amount": "string or null", "unit": "string or null"}
+  ],
+  "steps": [
+    {"step_number": integer, "instruction": "string", "duration": integer or null}
+  ]
+}
+"""

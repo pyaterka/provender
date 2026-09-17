@@ -7,6 +7,7 @@ from prompts import system_prompt
 from file_functions import get_conversation_filename, save_conversation, create_conversation_data, get_conversation_files, get_conversation_preview, load_conversation, display_conversation
 from pathlib import Path
 from datetime import datetime
+from db_functions import save_recipe
 
 
 def main():
@@ -150,6 +151,11 @@ def main():
                 print("  /load <number> - Preview and load a saved conversation")
                 print("  /recent        - Preview and load the most recent conversation")
                 print("  help           - Show this message")
+                continue
+
+            elif user_prompt.lower().startswith("/save"):
+                recipe_JSON = save_recipe(assistant_reply)
+                print(recipe_JSON)
                 continue
 
             elif user_prompt.lower().startswith("system "):
