@@ -7,7 +7,7 @@ from prompts import system_prompt
 from file_functions import get_conversation_filename, save_conversation, create_conversation_data, get_conversation_files, get_conversation_preview, load_conversation, display_conversation
 from pathlib import Path
 from datetime import datetime
-from db_functions import save_recipe
+from recipe_functions import save_recipe
 
 
 def main():
@@ -154,8 +154,21 @@ def main():
                 continue
 
             elif user_prompt.lower().startswith("/save"):
-                recipe_JSON = save_recipe(assistant_reply)
-                print(recipe_JSON)
+                last_recipe = None
+                for msg in reversed(messages):
+                    if msg["role"] == "assistant":
+                        last_recipe = msg["content"]
+                        break
+                
+                if not last_recipe:
+                    print("❌ No recipe to save. Ask for a recipe first!")
+                    continue
+                
+                recipe_id = save_recipe(last_recipe)
+                if recipe_id:
+                    print(f"✅ Saved recipe with ID: {recipe_id}")
+                else:
+                    print("❌ Failed to save recipe")
                 continue
 
             elif user_prompt.lower().startswith("system "):
