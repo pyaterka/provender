@@ -8,6 +8,7 @@ from file_functions import get_conversation_filename, save_conversation, create_
 from pathlib import Path
 from datetime import datetime
 from recipe_functions import save_recipe
+from db_functions import list_all_recipes
 
 
 def main():
@@ -46,7 +47,7 @@ def main():
                 save_conversation(conversation_file, create_conversation_data(messages, timestamp, system_prompt, total_tokens))
                 break
 
-            elif user_prompt.lower() in ["list", "/list"]:
+            elif user_prompt.lower() in ["list conversations", "/list conversations"]:
                 # Show all available conversations
                 files = get_conversation_files()
                 if not files:
@@ -100,8 +101,12 @@ def main():
                     print("❌ Failed to load conversation.")
                 continue
 
-            elif user_prompt.lower().startswith("/load "):
+            elif user_prompt.lower().startswith("/list recipes"):
+                list_all_recipes()
+                continue
 
+            elif user_prompt.lower().startswith("/load "):
+                
                 parts = user_prompt.split()
                 if len(parts) < 2:
                     print("Usage: /load <number> (e.g., /load 1)")
@@ -163,7 +168,7 @@ def main():
                 if not last_recipe:
                     print("❌ No recipe to save. Ask for a recipe first!")
                     continue
-                
+
                 recipe_id = save_recipe(last_recipe)
                 if recipe_id:
                     print(f"✅ Saved recipe with ID: {recipe_id}")
