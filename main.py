@@ -8,7 +8,7 @@ from file_functions import get_conversation_filename, save_conversation, create_
 from pathlib import Path
 from datetime import datetime
 from recipe_functions import save_recipe
-from db_functions import list_all_recipes
+from db_functions import list_all_recipes, show_recipe
 
 
 def main():
@@ -104,6 +104,19 @@ def main():
             elif user_prompt.lower().startswith("/list recipes"):
                 list_all_recipes()
                 continue
+
+            elif user_prompt.lower().startswith("/show"):
+                parts = user_prompt.split()
+                if len(parts) < 2:
+                    print("Usage: /show <id> (e.g., /show 2)")
+                    continue
+                try:
+                    recipe_id = int(parts[1])
+                    show_recipe(recipe_id)
+                except ValueError:
+                    print("❌ Please enter a valid number.")
+                continue
+
 
             elif user_prompt.lower().startswith("/load "):
                 
