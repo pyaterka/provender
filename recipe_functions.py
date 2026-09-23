@@ -150,3 +150,29 @@ def save_recipe_to_db(recipe_data):
         return None
     finally:
         conn.close()
+
+def save_recipe_feedback(recipe_id, cooked, would_make_again, rating, reason):
+    conn = sqlite3.connect('test_recipes.db')
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA foreign_keys = ON")
+
+    try:
+        with conn:
+            cursor.execute('''
+                INSERT INTO feedback (recipe_id, rating, would_make_again, reason, cooked)
+                VALUES (?, ?, ?, ?, ?)
+            ,''' (
+                recipe_id,
+                rating,
+                1 if would_make_again == 'y' else 0,
+                reason,
+                1 if cooked == 'y' else 0
+            ))
+
+            return recipe_id
+    except Exception as e:
+        print(f"❌ Error saving feedback: {e}")
+        return None
+    finally:
+        conn.close()

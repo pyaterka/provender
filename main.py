@@ -7,7 +7,7 @@ from prompts import system_prompt
 from file_functions import get_conversation_filename, save_conversation, create_conversation_data, get_conversation_files, get_conversation_preview, load_conversation, display_conversation
 from pathlib import Path
 from datetime import datetime
-from recipe_functions import save_recipe
+from recipe_functions import save_recipe, save_recipe_feedback
 from db_functions import list_all_recipes, show_recipe
 
 
@@ -116,6 +116,42 @@ def main():
                 except ValueError:
                     print("❌ Please enter a valid number.")
                 continue
+
+            elif user_prompt.lower().startswith("/feedback "):
+                parts = user_prompt.split()
+                if len(parts) < 2:
+                    print("Usage: /feedback <number> (e.g. /feedback 1)")
+                    continue
+                cooked = input("Have you cooked it? (y/n): ")
+                if cooked not in ['y', 'n']:
+                    print("Invalid entree")
+                    continue
+                would_make_again = input("Would make again? (y/n): ")
+                if would_make_again not in ['y', 'n']:
+                    print("Invalid entree")
+                    continue
+                rating = input("Rating (1-5): ")
+                try:
+                    rating = int(rating)
+                    if 1 > rating > 5:
+                        print("Invalid entree")
+                        continue
+                except Exception as e:
+                    print("Invalid entree")
+                    continue
+                reason = input("Reason: ")
+                try:
+                    recipe_id = int(parts[1])
+                    recipe_id = save_recipe_feedback(recipe_id, cooked, would_make_again, rating, reason)
+                    if recipe_id:
+                        print(f"✅ Saved recipe feedback with ID: {recipe_id}")
+                    else:
+                        print("❌ Failed to save recipe feedback")
+                    continue
+                except ValueError:
+                    print("❌ Please enter a valid number.")
+                continue
+
 
 
             elif user_prompt.lower().startswith("/load "):

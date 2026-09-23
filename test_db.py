@@ -78,6 +78,51 @@ def reset_database():
     conn.close()
     print("✅ Database reset with 3 tables")
 
+def add_feedback_table():
+    conn = sqlite3.connect('test_recipes.db')
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA foreign_keys = ON")
+
+    cursor.execute("DROP TABLE IF EXISTS feedback")
+
+    cursor.execute('''
+        CREATE TABLE feedback (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            recipe_id INTEGER NOT NULL UNIQUE,
+            rating INTEGER CHECK(rating BETWEEN 1 AND 5),
+            would_make_again BOOLEAN,
+            reason TEXT,
+            cooked BOOLEAN DEFAULT 0,
+            cooked_at TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE
+        )
+    ''')
+
+    conn.commit()
+    conn.close()
+    print("✅ New table feedback added to test_db.py")
+
+def add_pantry_table():
+    conn = sqlite3.connect('test_recipes.db')
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA foreign_keys = ON")
+
+    cursor.execute('''
+        CREATE TABLE pantry (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ingredient_name TEXT NOT NULL UNIQUE,
+            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            auto_added BOOLEAN DEFAULT 0
+        )
+    ''')
+
+    conn.commit()
+    conn.close()
+    print("✅ New table pantry added to test_db.py")
+
 def insert_test_tags():
     conn = sqlite3.connect('test_recipes.db')
     cursor = conn.cursor()
@@ -480,20 +525,4 @@ def test_cascade():
     conn.close()
     
 if __name__ == "__main__":
-    reset_database()
-    insert_test_recipe()
-    insert_test_tags()
-    
-    # Tag the recipe
-    tag_recipe(1, "quick")
-    tag_recipe(1, "healthy")
-    tag_recipe(1, "breakfast")
-    
-    # Show tags for the recipe
-    show_recipe_tags(1)
-    
-    # Find recipes by tag
-    find_recipes_by_tag("healthy")
-    
-    # Find recipes with multiple tags
-    find_recipes_with_all_tags("quick", "healthy")
+    add_feedback_table()
