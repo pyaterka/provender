@@ -4,6 +4,7 @@ import sqlite3
 
 from openai import OpenAI
 from dotenv import load_dotenv
+from datetime import datetime
 
 from prompts import save_prompt
 
@@ -151,23 +152,35 @@ def save_recipe_to_db(recipe_data):
     finally:
         conn.close()
 
-def save_recipe_feedback(recipe_id, cooked, would_make_again, rating, reason):
+def save_recipe_feedback(recipe_id, rating, would_make_again, reason, cooked):
     conn = sqlite3.connect('test_recipes.db')
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute("PRAGMA foreign_keys = ON")
 
+    would_make_again_int = 1 if would_make_again == 'y' else 0
+    cooked_int = 1 if cooked == 'y' else 0
+    cooked_at = datetime.now().isoformat() if cooked == 'y' else None
+
     try:
         with conn:
             cursor.execute('''
-                INSERT INTO feedback (recipe_id, rating, would_make_again, reason, cooked)
-                VALUES (?, ?, ?, ?, ?)
-            ,''' (
+                INSERT INTO feedback (recipe_id, rating, would_make_again, reason, cooked, cooked_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(recipe_id) DO UPDATE SET
+                    rating = excluded.rating,
+                    would_make_again = excluded.would_make_again,
+                    reason = excluded.reason,
+                    cooked = excluded.cooked,
+                    cooked_at = COALESCE(feedback.cooked_at, excluded.cooked_at),
+                    updated_at = CURRENT_TIMESTAMP
+            ''', (
                 recipe_id,
                 rating,
-                1 if would_make_again == 'y' else 0,
+                would_make_again_int,
                 reason,
-                1 if cooked == 'y' else 0
+                cooked_int,
+                cooked_at
             ))
 
             return recipe_id

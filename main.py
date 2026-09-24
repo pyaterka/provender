@@ -1,12 +1,15 @@
 
 import os
 import sys
+import sqlite3
+
 from openai import OpenAI
 from dotenv import load_dotenv
 from prompts import system_prompt
 from file_functions import get_conversation_filename, save_conversation, create_conversation_data, get_conversation_files, get_conversation_preview, load_conversation, display_conversation
 from pathlib import Path
 from datetime import datetime
+
 from recipe_functions import save_recipe, save_recipe_feedback
 from db_functions import list_all_recipes, show_recipe
 
@@ -118,39 +121,67 @@ def main():
                 continue
 
             elif user_prompt.lower().startswith("/feedback "):
+
                 parts = user_prompt.split()
                 if len(parts) < 2:
                     print("Usage: /feedback <number> (e.g. /feedback 1)")
                     continue
-                cooked = input("Have you cooked it? (y/n): ")
-                if cooked not in ['y', 'n']:
-                    print("Invalid entree")
-                    continue
-                would_make_again = input("Would make again? (y/n): ")
-                if would_make_again not in ['y', 'n']:
-                    print("Invalid entree")
-                    continue
-                rating = input("Rating (1-5): ")
-                try:
-                    rating = int(rating)
-                    if 1 > rating > 5:
-                        print("Invalid entree")
-                        continue
-                except Exception as e:
-                    print("Invalid entree")
-                    continue
-                reason = input("Reason: ")
+
                 try:
                     recipe_id = int(parts[1])
-                    recipe_id = save_recipe_feedback(recipe_id, cooked, would_make_again, rating, reason)
-                    if recipe_id:
-                        print(f"✅ Saved recipe feedback with ID: {recipe_id}")
-                    else:
-                        print("❌ Failed to save recipe feedback")
-                    continue
                 except ValueError:
-                    print("❌ Please enter a valid number.")
+                    print("❌ Please enter a valid recipe number.")
+                    continue
+                
+                conn = sqlite3.connect('test_recipes.db')
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute("SELECT name FROM recipes WHERE id = ?", (recipe_id,))
+                recipe = cursor.fetchone()
+                conn.close()
+                
+                if not recipe:
+                    print(f"❌ Recipe {recipe_id} not found.")
+                    continue
+                
+                print(f"\n📖 Rating: {recipe['name']}")
+
+                cooked = input("Have you cooked it? (y/n): ").lower().strip()
+                if cooked not in ['y', 'n']:
+                    print("❌ Invalid entry")
+                    continue
+                if cooked == 'n':
+                    result = save_recipe_feedback(recipe_id, None, None, None, 'n')
+                    if result:
+                        print(f"✅ Marked recipe {recipe_id} as not cooked")
+                    else:
+                        print("❌ Failed to save")
+                    continue
+
+                would_make_again = input("Would make again? (y/n): ").lower().strip()
+                if would_make_again not in ['y', 'n']:
+                    print("❌ Invalid entry")
+                    continue
+
+                rating_input = input("Rating (1-5): ").strip()
+                try:
+                    rating = int(rating_input)
+                    if rating < 1 or rating > 5:
+                        print("❌ Rating must be between 1 and 5")
+                        continue
+                except ValueError:
+                    print("❌ Rating must be a number")
+                    continue
+
+                reason = input("Reason: ").strip()
+
+                result = save_recipe_feedback(recipe_id, rating, would_make_again, reason, cooked)
+                if result:
+                    print(f"✅ Saved feedback for recipe {recipe_id}")
+                else:
+                    print("❌ Failed to save feedback")
                 continue
+
 
 
 

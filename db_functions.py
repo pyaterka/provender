@@ -106,6 +106,24 @@ def show_recipe(recipe_id: int):
     if tags:
         print(f"\n🏷️ Tags: {', '.join(tags)}")
 
+    cursor.execute('''
+        SELECT rating, would_make_again, reason, cooked, cooked_at
+        FROM feedback
+        WHERE recipe_id = ?
+    ''', (recipe_id,))
+    feedback = cursor.fetchone()
+
+    if feedback:
+        would_make_again = "✅ Would make again" if feedback['would_make_again'] == 1 else "❌ Wouldn't cook again"
+
+        print("\n📊 Your Feedback:")
+        
+        print(f"   Rating: {feedback['rating']}/5 | {would_make_again}")
+        print(f"   Reason: {feedback['reason']}")
+        if feedback['cooked'] == 1:
+            print(f"   Cooked on: {feedback['cooked_at']}")
+
+
     print("\n" + "=" * 70)
     conn.close()
 
