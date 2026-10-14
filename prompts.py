@@ -26,6 +26,7 @@ Convert the following recipe into JSON.
 Rules:
 - Output ONLY valid JSON, no explanation, no markdown
 - Use null for missing values
+- Duration should be in minutes convert seconds into minutes
 - Don't invent data
 - Use this exact structure:
 

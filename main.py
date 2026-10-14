@@ -11,8 +11,8 @@ from pathlib import Path
 from datetime import datetime
 
 from recipe_functions import save_recipe, save_recipe_feedback
-from db_functions import list_all_recipes, show_recipe
-
+from db_functions import list_all_recipes, show_recipe, save_ingredient, list_all_ingredients, delete_ingredient
+from profile_functions import build_user_profile, format_profile_for_prompt
 
 def main():
 
@@ -24,9 +24,26 @@ def main():
 
     model = os.environ.get('DEFAULT_MODEL')
 
-    messages =[
-        {"role": "system", "content": system_prompt}
-    ]
+    profile = build_user_profile()
+    profile_text = format_profile_for_prompt(profile)
+
+    enhanced_prompt = f"""{system_prompt}
+
+    === USER PROFILE ===
+    {profile_text}
+
+    When recommending recipes:
+    1. Prefer recipes using the user's staples
+    2. Avoid patterns from disliked recipes
+    3. Don't re-recommend already-cooked recipes unless rated 5+
+    4. Mention staple overlap when relevant
+    """
+
+    messages = [{"role": "system", "content": enhanced_prompt}]
+
+    print("\n=== DEBUG: ENHANCED PROMPT ===")
+    print(enhanced_prompt)
+    print("=" * 40 + "\n")
 
     total_tokens = 0
 
@@ -36,72 +53,33 @@ def main():
         while True:
             user_prompt = input("You: ")
 
-            if user_prompt.lower() in ["clear"]:
-                save_conversation(conversation_file, create_conversation_data(messages, timestamp, system_prompt, total_tokens))
-
-                messages =[
-                    {"role": "system", "content": system_prompt}
-                ]
-                conversation_file, timestamp = get_conversation_filename()
-                print("Conversation saved and cleared. Starting fresh!")
-                continue  
-
-            elif user_prompt.lower() in ["exit", "quit"]:
-                save_conversation(conversation_file, create_conversation_data(messages, timestamp, system_prompt, total_tokens))
-                break
-
-            elif user_prompt.lower() in ["list conversations", "/list conversations"]:
-                # Show all available conversations
-                files = get_conversation_files()
-                if not files:
-                    print("📭 No saved conversations found.")
-                    continue
-
-                print("\n📁 Saved Conversations:")
-                print("-" * 60)
-
-                for i, file in enumerate(files, 1):
-                    preview = get_conversation_preview(file)
-                    if preview.get("error"):
-                        print(f"{i}. ⚠️ {preview['display_name']}")
-                    else:
-                        print(f"{i}. {preview['display_name']}")
-                        print(f"   📝 {preview['first_message']}")
-                        print(f"   💬 {preview['message_count']} messages | 🪙 {preview['total_tokens']} tokens")
-                        print()
-
+            if user_prompt.lower() in ["help", "/help"]:
+                print("\n📖 Commands:")
+                print("  clear          - Clear conversation history")
+                print("  exit/quit      - Exit program")
+                print("  system <model> - Switch model (e.g., system deepseek-v4-pro)")
+                print("  list           - Show all saved conversations")
+                print("  /load <number> - Preview and load a saved conversation")
+                print("  /recent        - Preview and load the most recent conversation")
+                print("  help           - Show this message")
                 continue
 
-            elif user_prompt.lower() == ("/recent"):
-
-                files  = get_conversation_files()
-                if not files:
-                    print("📭 No saved conversations found.")
+            elif user_prompt.lower().startswith("/save"):
+                last_recipe = None
+                for msg in reversed(messages):
+                    if msg["role"] == "assistant":
+                        last_recipe = msg["content"]
+                        break
+                
+                if not last_recipe:
+                    print("❌ No recipe to save. Ask for a recipe first!")
                     continue
 
-                filepath = files[0]
-                data = load_conversation(filepath) 
-
-                if data:
-                    print("\n📖 PREVIEWING MOST RECENT CONVERSATION:")
-                    display_conversation(data, show_numbers=False)
-
-                    print("\n" + "="*70)
-                    choice = input("🔀 Load this conversation? (y/n): ").lower().strip()
-                    if choice.lower() in ["yes", "y"]:
-                        messages = data.get("messages", [])
-                        total_tokens = data.get("total_tokens", 0)
-                        timestamp = data.get("conversation_id")
-                        conversation_file = filepath
-                    
-                        print(f"\n✅ Loaded conversation: {data.get('conversation_id')}")
-                        print(f"   Messages: {len(messages)}")
-                        print(f"   Tokens: {total_tokens}")
-                        print("\n💬 You can now continue chatting!")
-                    else:
-                        print("✅ Kept current conversation.")
+                recipe_id = save_recipe(last_recipe)
+                if recipe_id:
+                    print(f"✅ Saved recipe with ID: {recipe_id}")
                 else:
-                    print("❌ Failed to load conversation.")
+                    print("❌ Failed to save recipe")
                 continue
 
             elif user_prompt.lower().startswith("/list recipes"):
@@ -182,6 +160,91 @@ def main():
                     print("❌ Failed to save feedback")
                 continue
 
+            elif user_prompt.lower().startswith('/staple '):
+                parts = user_prompt.split(maxsplit=1)
+                if len(parts) < 2:
+                    print("Usage: /staple <name> (e.g. /staple eggs)")
+                    continue
+                ingredient = parts[1].lower().strip()
+                success = save_ingredient(ingredient)
+                if success:
+                    print(f"✅ Added {ingredient} to pantry")
+                else:
+                    print(f"❌ Failed to add {'ingredient'}")
+                continue
+
+
+            elif user_prompt.lower().strip() == '/staples':
+                list_all_ingredients()
+                continue
+
+            elif user_prompt.lower().startswith('/unstaple '):
+                parts = user_prompt.split(maxsplit=1)
+                if len(parts) < 2:
+                    print("Usage: /unstaple <name> (e.g. /unstaple eggs)")
+                    continue
+                ingredient = parts[1].lower().strip()
+                success = delete_ingredient(ingredient)
+                if success:
+                    print(f"✅ Deleted {ingredient} from pantry")
+                else:
+                    print(f"❌ Failed to delete {'ingredient'}")
+                continue
+
+            
+            elif user_prompt.lower() in ["list conversations", "/list conversations"]:
+                # Show all available conversations
+                files = get_conversation_files()
+                if not files:
+                    print("📭 No saved conversations found.")
+                    continue
+
+                print("\n📁 Saved Conversations:")
+                print("-" * 60)
+
+                for i, file in enumerate(files, 1):
+                    preview = get_conversation_preview(file)
+                    if preview.get("error"):
+                        print(f"{i}. ⚠️ {preview['display_name']}")
+                    else:
+                        print(f"{i}. {preview['display_name']}")
+                        print(f"   📝 {preview['first_message']}")
+                        print(f"   💬 {preview['message_count']} messages | 🪙 {preview['total_tokens']} tokens")
+                        print()
+
+                continue
+
+            elif user_prompt.lower() == ("/recent"):
+
+                files  = get_conversation_files()
+                if not files:
+                    print("📭 No saved conversations found.")
+                    continue
+
+                filepath = files[0]
+                data = load_conversation(filepath) 
+
+                if data:
+                    print("\n📖 PREVIEWING MOST RECENT CONVERSATION:")
+                    display_conversation(data, show_numbers=False)
+
+                    print("\n" + "="*70)
+                    choice = input("🔀 Load this conversation? (y/n): ").lower().strip()
+                    if choice.lower() in ["yes", "y"]:
+                        messages = data.get("messages", [])
+                        total_tokens = data.get("total_tokens", 0)
+                        timestamp = data.get("conversation_id")
+                        conversation_file = filepath
+                    
+                        print(f"\n✅ Loaded conversation: {data.get('conversation_id')}")
+                        print(f"   Messages: {len(messages)}")
+                        print(f"   Tokens: {total_tokens}")
+                        print("\n💬 You can now continue chatting!")
+                    else:
+                        print("✅ Kept current conversation.")
+                else:
+                    print("❌ Failed to load conversation.")
+                continue
 
 
 
@@ -227,34 +290,16 @@ def main():
                     print("❌ Please enter a valid number.")
                 continue
 
-            elif user_prompt.lower() in ["help", "/help"]:
-                print("\n📖 Commands:")
-                print("  clear          - Clear conversation history")
-                print("  exit/quit      - Exit program")
-                print("  system <model> - Switch model (e.g., system deepseek-v4-pro)")
-                print("  list           - Show all saved conversations")
-                print("  /load <number> - Preview and load a saved conversation")
-                print("  /recent        - Preview and load the most recent conversation")
-                print("  help           - Show this message")
+            elif user_prompt.lower() in ["clear"]:
+                save_conversation(conversation_file, create_conversation_data(messages, timestamp, system_prompt, total_tokens))
+
+                messages =[
+                    {"role": "system", "content": system_prompt}
+                ]
+                conversation_file, timestamp = get_conversation_filename()
+                print("Conversation saved and cleared. Starting fresh!")
                 continue
 
-            elif user_prompt.lower().startswith("/save"):
-                last_recipe = None
-                for msg in reversed(messages):
-                    if msg["role"] == "assistant":
-                        last_recipe = msg["content"]
-                        break
-                
-                if not last_recipe:
-                    print("❌ No recipe to save. Ask for a recipe first!")
-                    continue
-
-                recipe_id = save_recipe(last_recipe)
-                if recipe_id:
-                    print(f"✅ Saved recipe with ID: {recipe_id}")
-                else:
-                    print("❌ Failed to save recipe")
-                continue
 
             elif user_prompt.lower().startswith("system "):
                 parts = user_prompt.split()
@@ -273,6 +318,11 @@ def main():
                     print(f"❌ Invalid model: {new_model}")
                     print(f"   Available models: {', '.join(allowed_models)}")
                 continue
+
+            elif user_prompt.lower() in ["exit", "quit"]:
+                save_conversation(conversation_file, create_conversation_data(messages, timestamp, system_prompt, total_tokens))
+                break
+
 
             elif not user_prompt.strip():
                 continue

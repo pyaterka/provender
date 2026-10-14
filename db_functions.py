@@ -127,8 +127,66 @@ def show_recipe(recipe_id: int):
     print("\n" + "=" * 70)
     conn.close()
 
+def save_ingredient(ingredient):
+    conn = sqlite3.connect('test_recipes.db')
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    try:
+        with conn:
+            cursor.execute('''
+                INSERT OR IGNORE INTO pantry (ingredient_name)
+                VALUES (?)
+            ''', (ingredient,))
+
+        return True
+
+    except Exception as e:
+        print(f"❌ Error saving ingredient: {e}")
+        return False
+    finally:
+        conn.close()
+
+def list_all_ingredients():
+    conn = sqlite3.connect('test_recipes.db')
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT ingredient_name FROM pantry ORDER BY ingredient_name")
+    rows = cursor.fetchall()
+
+    if not rows:
+        print("📭 No saved ingredients yet.")
+        conn.close()
+        return
+
+    print("\n📚 Saved Ingredients:")
+    print("-" * 70)
+    for row in rows:
+        print(f"  {row['ingredient_name']}")
+    print("-"*70)
+
+    conn.close()
 
 
+def delete_ingredient(ingredient):
 
-    
+    conn = sqlite3.connect('test_recipes.db')
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    try:
+        with conn:
+            cursor.execute('''
+                DELETE FROM pantry
+                WHERE ingredient_name = ?
+            ''', (ingredient,))
+
+        return True
+
+    except Exception as e:
+        print(f"❌ Error deleting ingredient: {e}")
+        return False
+    finally:
+        conn.close() 
 
